@@ -125,3 +125,10 @@ def test_validate_password_policy_weak(weak_pwd):
     """Invalid cases: fails individual password policy rules."""
     with pytest.raises(ValueError, match="Password does not meet required security policy"):
         validate_password_policy(weak_pwd)
+
+
+@pytest.mark.unit
+def test_controlled_ci_pipeline_failure_demonstration():
+    """Controlled failure test created to demonstrate GitHub Actions CI rejection."""
+    assert False, "Controlled failure: proving GitHub Actions CI pipeline blocks failing tests"
+
