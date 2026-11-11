@@ -125,3 +125,4 @@ def test_validate_password_policy_weak(weak_pwd):
     """Invalid cases: fails individual password policy rules."""
     with pytest.raises(ValueError, match="Password does not meet required security policy"):
         validate_password_policy(weak_pwd)
+

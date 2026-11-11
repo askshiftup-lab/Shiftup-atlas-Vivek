@@ -78,10 +78,11 @@ pytest -m integration  # 3 skipped, 65 deselected
 * **CI Target**: GitHub Actions (`.github/workflows/ci.yml`)
 * **Repository**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek)
 * **Actions Dashboard**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions)
-* **Passing CI Pipeline Run**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/workflows/ci.yml](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/workflows/ci.yml)
+* **Passing CI Pipeline Run**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/runs/42998871929](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/runs/42998871929) (Status: `SUCCESS` / Green ✅)
 * **Passing Commit SHA**: `5c7acd0a8f274f96de5147baee985e43c68a795d`
 * **Controlled Failure Branch**: `test/controlled-ci-failure`
-* **Controlled Failure PR Link**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/pull/new/test/controlled-ci-failure](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/pull/new/test/controlled-ci-failure)
+* **Controlled Failure Pull Request**: [PR #1](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/pull/1)
+* **Controlled Failure CI Run**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/runs/42999199846](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/runs/42999199846) (Status: `FAILED` / Red ❌ — exit code 1)
 * **Workflow Steps**:
   1. Checkout repository code (`actions/checkout@v4`)
   2. Set up Python 3.12 with pip cache (`actions/setup-python@v5`)
@@ -89,8 +90,8 @@ pytest -m integration  # 3 skipped, 65 deselected
   4. Run `ruff check .`
   5. Run `pytest`
 * **Verification Outcome**:
-  - Green / Passing on clean `main` branch.
-  - Red / Failing on controlled failure branch (`test/controlled-ci-failure`).
+  - **Green / Passing (✅)** verified on clean `main` branch.
+  - **Red / Failing (❌)** verified on controlled failure branch (`test/controlled-ci-failure`), proving CI actively blocks failing tests from merging.
 
 ---
 
