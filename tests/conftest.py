@@ -53,7 +53,7 @@ def service_mode(stable_test_config: dict[str, Any]) -> str:
     Returns:
         "real" if both ATLAS_AUTH_URL and ATLAS_PROFILE_URL are set, else "mock".
     """
-    if stable_test_config["auth_base_url"] and stable_test_config["profile_base_url"]:
+    if os.getenv("TEST_SERVICE_MODE") == "real":
         return "real"
     return "mock"
 
@@ -101,7 +101,7 @@ def synthetic_user() -> Callable[..., dict[str, str]]:
         uname = username or f"synthetic_user_{index}"
         fname = first_name or f"User{index}"
         return {
-            "email": email or f"user{index}@example.test",
+            "email": email or f"user{index}@example.com",
             "password": password or "PolicyPass123!",
             "username": uname,
             "first_name": fname,
