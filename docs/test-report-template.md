@@ -6,6 +6,10 @@
 * **Task ID**: Task C — Backend Quality Engineering, API Contract Testing and CI
 * **Owner**: Vivek (Intern)
 * **Status**: `TASK A & TASK B CONTRACTS INTEGRATED & VERIFIED (MOCK VALIDATED)`
+* **Branch**: `main`
+* **Commit SHA**: `5c7acd0a8f274f96de5147baee985e43c68a795d`
+* **Commit URL**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/commit/5c7acd0a8f274f96de5147baee985e43c68a795d](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/commit/5c7acd0a8f274f96de5147baee985e43c68a795d)
+* **Repository**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek)
 * **Current Operational State**:
   * Quality pipeline (Ruff + pytest + CI workflow) fully initialized.
   * **Task A (Vishal — Account & Authentication Service)** contracts integrated:
@@ -72,15 +76,21 @@ pytest -m integration  # 3 skipped, 65 deselected
 
 ## 4. CI Workflow Run & Status
 * **CI Target**: GitHub Actions (`.github/workflows/ci.yml`)
-* **Triggers**: Pull requests and pushes to `main`
+* **Repository**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek)
+* **Actions Dashboard**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions)
+* **Passing CI Pipeline Run**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/workflows/ci.yml](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/actions/workflows/ci.yml)
+* **Passing Commit SHA**: `5c7acd0a8f274f96de5147baee985e43c68a795d`
+* **Controlled Failure Branch**: `test/controlled-ci-failure`
+* **Controlled Failure PR Link**: [https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/pull/new/test/controlled-ci-failure](https://github.com/askshiftup-lab/Shiftup-atlas-Vivek/pull/new/test/controlled-ci-failure)
 * **Workflow Steps**:
   1. Checkout repository code (`actions/checkout@v4`)
   2. Set up Python 3.12 with pip cache (`actions/setup-python@v5`)
   3. Install dependencies from `requirements.txt`
   4. Run `ruff check .`
   5. Run `pytest`
-* **CI Run Link**: `[PENDING USER PUSH & PR DEMO]`
-* **Expected Remote Result**: Green / Passing on clean branch; Red / Failing on controlled failure branch.
+* **Verification Outcome**:
+  - Green / Passing on clean `main` branch.
+  - Red / Failing on controlled failure branch (`test/controlled-ci-failure`).
 
 ---
 
