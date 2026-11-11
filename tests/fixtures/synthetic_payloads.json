@@ -231,22 +231,22 @@
   ],
   "profile_cases": [
     {
-      "id": "PROF-01-profile-retrieval-authenticated",
+      "id": "PROF-01-profile-retrieval-authenticated-v1",
       "preconditions": "User logged in with active Bearer token",
       "method": "GET",
-      "path": "/profiles/me",
+      "path": "/v1/profile",
       "payload": null,
       "expected_status": 200,
       "expected_response_shape": "json object with user_id, username, and interests",
       "expected_side_effect": "Read-only access; database remains unchanged",
       "security_note": "Ensures authenticated caller can view their own profile",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-02-missing-or-invalid-profile-fields",
+      "id": "PROF-02-missing-or-invalid-profile-fields-v1",
       "preconditions": "User logged in",
-      "method": "PUT",
-      "path": "/profiles/me",
+      "method": "PATCH",
+      "path": "/v1/profile",
       "payload": {
         "unauthorized_admin_role": true,
         "is_superuser": true
@@ -255,13 +255,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Profile attributes untouched; privilege escalation rejected",
       "security_note": "Mass-assignment protection against injection of disallowed fields",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-03-duplicate-username-conflict",
+      "id": "PROF-03-duplicate-username-conflict-v1",
       "preconditions": "Another user has registered username candidate1",
-      "method": "PUT",
-      "path": "/profiles/me",
+      "method": "PATCH",
+      "path": "/v1/profile",
       "payload": {
         "username": "candidate1"
       },
@@ -269,13 +269,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Current user username remains unchanged",
       "security_note": "Enforces global uniqueness across user profile identifiers",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-04-valid-interest-id-list",
+      "id": "PROF-04-valid-interest-id-list-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/interests",
+      "path": "/v1/profile/interests",
       "payload": {
         "interest_ids": ["tech", "art"]
       },
@@ -283,13 +283,13 @@
       "expected_response_shape": "json object containing updated interests array",
       "expected_side_effect": "Profile interest list updated to exactly ['tech', 'art']",
       "security_note": "Allows users to associate recognized active catalog interests",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-05-unknown-interest-ids",
+      "id": "PROF-05-unknown-interest-ids-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/interests",
+      "path": "/v1/profile/interests",
       "payload": {
         "interest_ids": ["tech", "unknown_magic_hobby"]
       },
@@ -297,13 +297,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Interests list remains unchanged; partial update avoided",
       "security_note": "Ensures only curated catalog tags can be assigned",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-06-inactive-interest-ids",
+      "id": "PROF-06-inactive-interest-ids-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/interests",
+      "path": "/v1/profile/interests",
       "payload": {
         "interest_ids": ["archived_crypto"]
       },
@@ -311,13 +311,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Interests list remains unchanged",
       "security_note": "Prevents selection of deprecated or inactive catalog entities",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-07-duplicate-interest-ids",
+      "id": "PROF-07-duplicate-interest-ids-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/interests",
+      "path": "/v1/profile/interests",
       "payload": {
         "interest_ids": ["tech", "tech"]
       },
@@ -325,27 +325,27 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Interests list remains unchanged",
       "security_note": "Guarantees set uniqueness in persisted interests",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-08-more-than-five-interests",
+      "id": "PROF-08-more-than-five-interests-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/interests",
+      "path": "/v1/profile/interests",
       "payload": {
         "interest_ids": ["tech", "art", "music", "sports", "science", "gaming"]
       },
       "expected_status": 400,
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Interests list remains unchanged",
-      "security_note": "Limits collection size to prevent storage and payload bloat",
-      "provisional": true
+      "security_note": "Limits collection size to prevent storage and payload bloat (max 5)",
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-09-invalid-education-category-id",
+      "id": "PROF-09-invalid-education-category-id-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/education",
+      "path": "/v1/profile/education",
       "payload": {
         "category_id": "invalid_kindergarten",
         "institution_id": "inst_mit"
@@ -354,13 +354,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Education details remain unchanged",
       "security_note": "Validates category foreign key against approved taxonomies",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-10-invalid-institution-id",
+      "id": "PROF-10-invalid-institution-id-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/education",
+      "path": "/v1/profile/education",
       "payload": {
         "category_id": "undergraduate",
         "institution_id": "inst_fake_999"
@@ -369,13 +369,13 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Education details remain unchanged",
       "security_note": "Validates institution foreign key against approved institute list",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
     },
     {
-      "id": "PROF-11-invalid-theme-preference",
+      "id": "PROF-11-invalid-theme-preference-v1",
       "preconditions": "User logged in",
       "method": "PUT",
-      "path": "/profiles/me/theme",
+      "path": "/v1/profile/preferences",
       "payload": {
         "theme": "neon_rainbow"
       },
@@ -383,7 +383,43 @@
       "expected_response_shape": "json object with an error field",
       "expected_side_effect": "Theme preference remains unchanged",
       "security_note": "Enforces strict enum choices (light, dark, system)",
-      "provisional": true
+      "approved_contract": "Task B (Pranathi)"
+    },
+    {
+      "id": "PROF-12-interests-catalog-retrieval-v1",
+      "preconditions": "Public endpoint accessible",
+      "method": "GET",
+      "path": "/v1/interests",
+      "payload": null,
+      "expected_status": 200,
+      "expected_response_shape": "json object with items list of active interests",
+      "expected_side_effect": "Returns active catalogue without modifying database",
+      "security_note": "Catalogue is accessible for frontend selection components",
+      "approved_contract": "Task B (Pranathi)"
+    },
+    {
+      "id": "PROF-13-username-availability-check-v1",
+      "preconditions": "Public endpoint accessible",
+      "method": "GET",
+      "path": "/v1/usernames/availability?value=fresh_unique_user",
+      "payload": null,
+      "expected_status": 200,
+      "expected_response_shape": "json object with username and available boolean",
+      "expected_side_effect": "Non-mutating lookup",
+      "security_note": "Safe identifier discovery",
+      "approved_contract": "Task B (Pranathi)"
+    },
+    {
+      "id": "PROF-14-onboarding-progress-update-v1",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/v1/onboarding/steps/profile_created",
+      "payload": null,
+      "expected_status": 200,
+      "expected_response_shape": "json object with step and status completed",
+      "expected_side_effect": "Onboarding step recorded for user identity",
+      "security_note": "Tracks onboarding state transitions safely",
+      "approved_contract": "Task B (Pranathi)"
     }
   ]
 }

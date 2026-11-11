@@ -36,10 +36,20 @@ class InMemoryState:
     """
 
     # Master catalog of allowed interests and education items
-    KNOWN_INTERESTS: set[str] = {"tech", "art", "music", "sports", "science", "gaming"}
-    INACTIVE_INTERESTS: set[str] = {"archived_crypto", "deprecated_flash"}
-    VALID_EDU_CATEGORIES: set[str] = {"undergraduate", "postgraduate", "doctorate", "bootcamp"}
-    VALID_INSTITUTIONS: set[str] = {"inst_mit", "inst_stanford", "inst_oxford", "inst_iit"}
+    KNOWN_INTERESTS: set[str] = {
+        "tech", "art", "music", "sports", "science", "gaming",
+        "interest_tech", "interest_art", "interest_music", "interest_sports",
+        "interest_science", "interest_gaming",
+    }
+    INACTIVE_INTERESTS: set[str] = {
+        "archived_crypto", "deprecated_flash", "interest_archived_crypto"
+    }
+    VALID_EDU_CATEGORIES: set[str] = {
+        "undergraduate", "postgraduate", "doctorate", "bootcamp", "puc_11_12", "alumni"
+    }
+    VALID_INSTITUTIONS: set[str] = {
+        "inst_mit", "inst_stanford", "inst_oxford", "inst_iit", "inst_harvard"
+    }
     VALID_THEMES: set[str] = {"light", "dark", "system"}
 
     users: dict[str, dict[str, Any]] = {}
@@ -50,6 +60,7 @@ class InMemoryState:
     revoked_tokens: set[str] = set()
     password_reset_tokens: dict[str, str] = {}  # token -> email
     profiles: dict[str, dict[str, Any]] = {}  # email -> profile
+    onboarding_states: dict[str, dict[str, Any]] = {}  # user_id -> onboarding state
 
     @classmethod
     def reset(cls) -> None:
@@ -62,6 +73,7 @@ class InMemoryState:
         cls.revoked_tokens.clear()
         cls.password_reset_tokens.clear()
         cls.profiles.clear()
+        cls.onboarding_states.clear()
 
 
 class MockAuthClient:
@@ -412,6 +424,8 @@ class MockAuthClient:
 class MockProfileClient:
     """In-memory mock client implementing profile and interest management workflows.
 
+    Implements approved Task B endpoints (/v1/profile*, /v1/interests, etc.) and
+    provisional routes (/profiles/*).
     Exposes a `.request(method, path, json=None, headers=None)` interface compatible
     with httpx.Client.
     """
@@ -430,7 +444,25 @@ class MockProfileClient:
         payload = json or {}
         req_headers = headers or {}
 
-        # Authenticate session token from header
+        # ------------------------------------------------------------------
+        # Public Catalogue & Utility Endpoints (Task B)
+        # ------------------------------------------------------------------
+        if method_upper == "GET" and path.startswith("/v1/usernames/availability"):
+            val = path.split("value=")[-1] if "value=" in path else payload.get("value", "")
+            return self._handle_username_availability(val)
+
+        if method_upper == "GET" and path == "/v1/interests":
+            return self._handle_get_interests()
+
+        if method_upper == "GET" and path == "/v1/education-categories":
+            return self._handle_get_education_categories()
+
+        if method_upper == "GET" and path.startswith("/v1/institutions"):
+            return self._handle_get_institutions()
+
+        # ------------------------------------------------------------------
+        # Authenticated Profile Endpoints
+        # ------------------------------------------------------------------
         current_email, auth_err = self._authenticate(req_headers)
         if auth_err:
             return auth_err
@@ -439,36 +471,107 @@ class MockProfileClient:
         if not profile:
             return MockResponse(404, {"error": "Profile record not found"})
 
-        # 1. Retrieve current user profile
-        if method_upper == "GET" and path == "/profiles/me":
+        # 1. Retrieve current user profile (Task B: /v1/profile, Prov: /profiles/me)
+        if method_upper == "GET" and path in ("/v1/profile", "/profiles/me"):
             return MockResponse(200, profile)
 
-        # 2. Cross-user profile access attempt: /profiles/{user_id}
-        if method_upper == "GET" and path.startswith("/profiles/"):
-            target_user_id = path.split("/profiles/", 1)[1]
+        # 2. Cross-user profile access attempt: /profiles/{user_id} or /v1/profile/{user_id}
+        if method_upper == "GET" and (
+            path.startswith("/profiles/") or path.startswith("/v1/profile/")
+        ):
+            target_user_id = (
+                path.split("/v1/profile/", 1)[1]
+                if path.startswith("/v1/profile/")
+                else path.split("/profiles/", 1)[1]
+            )
             if target_user_id != profile.get("user_id"):
                 return MockResponse(
                     403, {"error": "Forbidden: You cannot access another user's profile"}
                 )
             return MockResponse(200, profile)
 
-        # 3. Update profile fields (display_name, bio, education, theme)
-        if method_upper in ("PUT", "PATCH") and path == "/profiles/me":
+        # 3. Update permitted profile fields (Task B: PATCH /v1/profile, Prov: PUT /profiles/me)
+        if method_upper in ("PUT", "PATCH") and path in ("/v1/profile", "/profiles/me"):
             return self._handle_update_profile(profile, payload)
 
-        # 4. Update interests: /profiles/me/interests or /profiles/{user_id}/interests
+        # 4. Update interests: /v1/profile/interests or /profiles/me/interests
         if method_upper == "PUT" and "/interests" in path:
             return self._handle_update_interests(profile, payload)
 
-        # 5. Update education: /profiles/me/education
-        if method_upper == "PUT" and path == "/profiles/me/education":
+        # 5. Update education: /v1/profile/education or /profiles/me/education
+        if method_upper == "PUT" and path in ("/v1/profile/education", "/profiles/me/education"):
             return self._handle_update_education(profile, payload)
 
-        # 6. Update theme: /profiles/me/theme
-        if method_upper == "PUT" and path == "/profiles/me/theme":
+        # 6. Update institution: /v1/profile/institution
+        if method_upper == "PUT" and path == "/v1/profile/institution":
+            return self._handle_update_institution(profile, payload)
+
+        # 7. Update preferences/theme: /v1/profile/preferences or /profiles/me/theme
+        if method_upper == "PUT" and path in (
+            "/v1/profile/preferences",
+            "/profiles/me/theme",
+        ):
             return self._handle_update_theme(profile, payload)
 
+        # 8. Onboarding status: /v1/onboarding/status
+        if method_upper == "GET" and path == "/v1/onboarding/status":
+            uid = profile.get("user_id", "")
+            state = InMemoryState.onboarding_states.get(
+                uid, {"user_id": uid, "status": "in_progress", "completed_steps": []}
+            )
+            return MockResponse(200, state)
+
+        # 9. Onboarding step progress: /v1/onboarding/steps/{step}
+        if method_upper == "PUT" and path.startswith("/v1/onboarding/steps/"):
+            step_key = path.split("/v1/onboarding/steps/", 1)[1]
+            uid = profile.get("user_id", "")
+            state = InMemoryState.onboarding_states.setdefault(
+                uid, {"user_id": uid, "status": "in_progress", "completed_steps": []}
+            )
+            if step_key not in state["completed_steps"]:
+                state["completed_steps"].append(step_key)
+            return MockResponse(200, {"user_id": uid, "step": step_key, "status": "completed"})
+
         return MockResponse(404, {"error": f"Endpoint not found: {method} {path}"})
+
+    def _handle_username_availability(self, val: str) -> MockResponse:
+        cleaned = val.strip().lower()
+        if not cleaned:
+            return MockResponse(400, {"error": "Username value is required."})
+        taken = any(
+            p.get("username") == cleaned
+            for p in InMemoryState.profiles.values()
+        )
+        return MockResponse(200, {"username": cleaned, "available": not taken})
+
+    def _handle_get_interests(self) -> MockResponse:
+        items = [
+            {"id": "tech", "slug": "technology", "name": "Technology", "is_active": True},
+            {"id": "art", "slug": "art", "name": "Art", "is_active": True},
+            {"id": "music", "slug": "music", "name": "Music", "is_active": True},
+            {"id": "sports", "slug": "sports", "name": "Sports", "is_active": True},
+            {"id": "science", "slug": "science", "name": "Science", "is_active": True},
+            {"id": "gaming", "slug": "gaming", "name": "Gaming", "is_active": True},
+        ]
+        return MockResponse(200, {"items": items})
+
+    def _handle_get_education_categories(self) -> MockResponse:
+        items = [
+            {"id": "undergraduate", "slug": "undergraduate", "name": "Undergraduate"},
+            {"id": "postgraduate", "slug": "postgraduate", "name": "Postgraduate"},
+            {"id": "doctorate", "slug": "doctorate", "name": "Doctorate"},
+            {"id": "bootcamp", "slug": "bootcamp", "name": "Bootcamp"},
+        ]
+        return MockResponse(200, {"items": items})
+
+    def _handle_get_institutions(self) -> MockResponse:
+        items = [
+            {"id": "inst_mit", "name": "MIT", "city": "Cambridge", "country": "US"},
+            {"id": "inst_stanford", "name": "Stanford", "city": "Stanford", "country": "US"},
+            {"id": "inst_oxford", "name": "Oxford", "city": "Oxford", "country": "UK"},
+            {"id": "inst_iit", "name": "IIT", "city": "Delhi", "country": "IN"},
+        ]
+        return MockResponse(200, {"items": items})
 
     def _authenticate(self, headers: dict[str, str]) -> tuple[str | None, MockResponse | None]:
         auth_header = headers.get("Authorization") or headers.get("authorization")
@@ -485,7 +588,10 @@ class MockProfileClient:
     def _handle_update_profile(
         self, profile: dict[str, Any], payload: dict[str, Any]
     ) -> MockResponse:
-        allowed_keys = {"username", "display_name", "bio", "education", "theme"}
+        allowed_keys = {
+            "first_name", "display_name", "username", "bio", "education",
+            "education_category_id", "institution_id", "avatar_id", "theme", "theme_preference"
+        }
         disallowed = [k for k in payload if k not in allowed_keys]
         if disallowed:
             return MockResponse(
@@ -494,8 +600,10 @@ class MockProfileClient:
             )
 
         username = payload.get("username")
-        theme = payload.get("theme")
+        theme = payload.get("theme") or payload.get("theme_preference")
         education = payload.get("education")
+        cat_id = payload.get("education_category_id")
+        inst_id = payload.get("institution_id")
 
         if username is not None:
             if not isinstance(username, str) or not username.strip():
@@ -519,25 +627,41 @@ class MockProfileClient:
                     },
                 )
             profile["theme"] = theme
+            profile["theme_preference"] = theme
+
+        if cat_id is not None:
+            if cat_id not in InMemoryState.VALID_EDU_CATEGORIES:
+                return MockResponse(400, {"error": f"Unknown education category ID: '{cat_id}'"})
+            profile["education_category_id"] = cat_id
+
+        if inst_id is not None:
+            if inst_id not in InMemoryState.VALID_INSTITUTIONS:
+                return MockResponse(400, {"error": f"Unknown institution ID: '{inst_id}'"})
+            profile["institution_id"] = inst_id
 
         if education is not None:
-            cat_id = education.get("category_id")
-            inst_id = education.get("institution_id")
-            if cat_id and cat_id not in InMemoryState.VALID_EDU_CATEGORIES:
-                return MockResponse(
-                    400, {"error": f"Unknown education category ID: '{cat_id}'"}
-                )
-            if inst_id and inst_id not in InMemoryState.VALID_INSTITUTIONS:
-                return MockResponse(
-                    400, {"error": f"Unknown institution ID: '{inst_id}'"}
-                )
+            e_cat = education.get("category_id")
+            e_inst = education.get("institution_id")
+            if e_cat and e_cat not in InMemoryState.VALID_EDU_CATEGORIES:
+                return MockResponse(400, {"error": f"Unknown education category ID: '{e_cat}'"})
+            if e_inst and e_inst not in InMemoryState.VALID_INSTITUTIONS:
+                return MockResponse(400, {"error": f"Unknown institution ID: '{e_inst}'"})
             profile["education"] = education
 
-        for field in ("display_name", "bio"):
+        for field in ("first_name", "display_name", "bio", "avatar_id"):
             if field in payload:
                 profile[field] = str(payload[field])
 
         return MockResponse(200, profile)
+
+    def _handle_update_institution(
+        self, profile: dict[str, Any], payload: dict[str, Any]
+    ) -> MockResponse:
+        inst_id = payload.get("institution_id") or payload.get("id")
+        if not inst_id or inst_id not in InMemoryState.VALID_INSTITUTIONS:
+            return MockResponse(400, {"error": f"Unknown institution ID: '{inst_id}'"})
+        profile["institution_id"] = inst_id
+        return MockResponse(200, {"institution_id": inst_id})
 
     def _handle_update_education(
         self, profile: dict[str, Any], payload: dict[str, Any]

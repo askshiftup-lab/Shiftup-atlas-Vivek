@@ -1,8 +1,8 @@
 """Contract tests for Profile and Interests Service.
 
 Validates contract specifications defined in tests/fixtures/synthetic_payloads.json.
+Integrates approved Task B specifications from the Profile, Onboarding & Database Service.
 Runs against in-memory mocks by default, or live service if ATLAS_PROFILE_URL is set.
-All endpoints, response shapes, and status codes are marked as # PROVISIONAL.
 """
 
 from __future__ import annotations
@@ -21,16 +21,16 @@ with open(FIXTURES_PATH, "r", encoding="utf-8") as f:
     ALL_FIXTURES = json.load(f)
 PROFILE_CASES = ALL_FIXTURES["profile_cases"]
 
-# Loose provisional schemas
+# Validation schemas
 ERROR_RESPONSE_SCHEMA = {
     "type": "object",
-    "required": ["error"],  # PROVISIONAL
+    "required": ["error"],
     "properties": {"error": {"type": "string"}},
 }
 
 PROFILE_SUCCESS_SCHEMA = {
     "type": "object",
-    "required": ["user_id", "username"],  # PROVISIONAL
+    "required": ["user_id", "username"],
     "properties": {
         "user_id": {"type": "string"},
         "username": {"type": "string"},
@@ -40,8 +40,23 @@ PROFILE_SUCCESS_SCHEMA = {
 
 INTERESTS_SUCCESS_SCHEMA = {
     "type": "object",
-    "required": ["interests"],  # PROVISIONAL
+    "required": ["interests"],
     "properties": {"interests": {"type": "array"}},
+}
+
+CATALOG_SUCCESS_SCHEMA = {
+    "type": "object",
+    "required": ["items"],
+    "properties": {"items": {"type": "array"}},
+}
+
+AVAILABILITY_SUCCESS_SCHEMA = {
+    "type": "object",
+    "required": ["username", "available"],
+    "properties": {
+        "username": {"type": "string"},
+        "available": {"type": "boolean"},
+    },
 }
 
 
@@ -61,14 +76,14 @@ def test_profile_contract_cases(
     headers = logged_in_user["headers"]
 
     # Precondition for duplicate username: create a second user with the conflicting username
-    if case["id"] == "PROF-03-duplicate-username-conflict":
-        # Register second user who claims the username "candidate1"
+    if case["id"] == "PROF-03-duplicate-username-conflict-v1":
         auth_client.request(
             "POST",
-            "/auth/register",  # PROVISIONAL
+            "/v1/auth/registrations",
             json={
                 "email": "prior_owner@example.test",
-                "password": "PolicyPass123!",  # PROVISIONAL
+                "first_name": "PriorOwner",
+                "password": "PolicyPass123!",
                 "username": "candidate1",
             },
         )
@@ -86,27 +101,31 @@ def test_profile_contract_cases(
         f"got {response.status_code}. Response: {response.text}"
     )
 
-    # Loose schema validation
+    # Schema validation
     data = response.json()
     if case["expected_status"] >= 400:
         validate(instance=data, schema=ERROR_RESPONSE_SCHEMA)
-    elif case["id"] == "PROF-01-profile-retrieval-authenticated":
+    elif case["id"] == "PROF-01-profile-retrieval-authenticated-v1":
         validate(instance=data, schema=PROFILE_SUCCESS_SCHEMA)
-    elif case["id"] == "PROF-04-valid-interest-id-list":
+    elif case["id"] == "PROF-04-valid-interest-id-list-v1":
         validate(instance=data, schema=INTERESTS_SUCCESS_SCHEMA)
+    elif case["id"] == "PROF-12-interests-catalog-retrieval-v1":
+        validate(instance=data, schema=CATALOG_SUCCESS_SCHEMA)
+    elif case["id"] == "PROF-13-username-availability-check-v1":
+        validate(instance=data, schema=AVAILABILITY_SUCCESS_SCHEMA)
 
     # Side-effect assertions for mock mode
     if service_mode == "mock":
         email = logged_in_user["user"]["email"]
         profile_in_db = test_db_state.profiles.get(email, {})
 
-        if case["id"] == "PROF-04-valid-interest-id-list":
+        if case["id"] == "PROF-04-valid-interest-id-list-v1":
             assert profile_in_db.get("interests") == ["tech", "art"]
         elif case["id"] in (
-            "PROF-05-unknown-interest-ids",
-            "PROF-06-inactive-interest-ids",
-            "PROF-07-duplicate-interest-ids",
-            "PROF-08-more-than-five-interests",
+            "PROF-05-unknown-interest-ids-v1",
+            "PROF-06-inactive-interest-ids-v1",
+            "PROF-07-duplicate-interest-ids-v1",
+            "PROF-08-more-than-five-interests-v1",
         ):
             # Assert invalid selection did not touch interests
             assert profile_in_db.get("interests") == []
@@ -121,15 +140,13 @@ def test_user_cannot_access_another_users_profile(profile_client: Any, two_users
     user_a = two_users["user_a"]
     user_b = two_users["user_b"]
 
-    # User A tries to access User B's profile by path: /profiles/{user_b_id}
-    target_path = f"/profiles/{user_b['user_id']}"  # PROVISIONAL path
+    target_path = f"/v1/profile/{user_b['user_id']}"
     resp = profile_client.request(
         method="GET",
         path=target_path,
         headers=user_a["headers"],  # User A's token
     )
 
-    # Must be forbidden
     assert resp.status_code == 403, f"Expected 403 Forbidden, got {resp.status_code}"
     validate(instance=resp.json(), schema=ERROR_RESPONSE_SCHEMA)
 
@@ -151,14 +168,14 @@ def test_invalid_interest_selection_leaves_previous_selections_unchanged(
     # 1. Establish valid initial interests
     initial_payload = {"interest_ids": ["tech", "art"]}
     init_resp = profile_client.request(
-        "PUT", "/profiles/me/interests", json=initial_payload, headers=headers  # PROVISIONAL
+        "PUT", "/v1/profile/interests", json=initial_payload, headers=headers
     )
     assert init_resp.status_code == 200
 
     # 2. Attempt update containing 1 valid ID and 1 invalid ID
     bad_payload = {"interest_ids": ["music", "invalid_nonexistent_interest"]}
     bad_resp = profile_client.request(
-        "PUT", "/profiles/me/interests", json=bad_payload, headers=headers  # PROVISIONAL
+        "PUT", "/v1/profile/interests", json=bad_payload, headers=headers
     )
     assert bad_resp.status_code == 400
 
@@ -186,12 +203,11 @@ def test_profile_invalid_request_creates_no_partial_records(
         "illegal_injected_column": "ATTACK_VALUE",
     }
     resp = profile_client.request(
-        "PUT", "/profiles/me", json=bad_payload, headers=headers  # PROVISIONAL
+        "PATCH", "/v1/profile", json=bad_payload, headers=headers
     )
     assert resp.status_code == 400
 
     if service_mode == "mock":
         email = logged_in_user["user"]["email"]
         profile = test_db_state.profiles[email]
-        # Ensure display_name was not partially updated
         assert profile.get("display_name") == "", "Partial update detected after rejected request"

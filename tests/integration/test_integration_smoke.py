@@ -49,33 +49,44 @@ def test_live_profile_service_health_smoke():
 @pytest.mark.integration
 @pytest.mark.skipif(not HAS_LIVE_SERVICES, reason=SKIP_REASON)
 def test_live_end_to_end_user_lifecycle_smoke(synthetic_user):
-    """End-to-end integration test against live services: register, verify, login, read profile."""
+    """End-to-end integration test against live services:
+    Register (Task A) -> Verify OTP (Task A) -> Login (Task A) ->
+    Read Profile (Task B) -> Save Interests (Task B).
+    """
     user = synthetic_user(index=999)
 
     with httpx.Client(base_url=AUTH_URL, timeout=5.0) as auth_cli:
-        # 1. Register user
-        reg_resp = auth_cli.post("/auth/register", json=user)  # PROVISIONAL
-        assert reg_resp.status_code in (200, 201)
+        # 1. Register user (Task A)
+        reg_resp = auth_cli.post("/v1/auth/registrations", json=user)
+        assert reg_resp.status_code in (200, 201, 202)
 
-        # 2. Verify code
+        # 2. Verify code (Task A)
         verify_resp = auth_cli.post(
-            "/auth/verify",  # PROVISIONAL
-            json={"email": user["email"], "code": "123456"},  # PROVISIONAL
+            "/v1/auth/email-verifications/confirm",
+            json={"email": user["email"], "code": "123456"},
         )
         assert verify_resp.status_code == 200
 
-        # 3. Login
+        # 3. Login (Task A)
         login_resp = auth_cli.post(
-            "/auth/login",  # PROVISIONAL
+            "/v1/auth/sessions",
             json={"email": user["email"], "password": user["password"]},
         )
         assert login_resp.status_code == 200
         token = login_resp.json()["access_token"]
 
-    # 4. Access profile service using token
+    # 4. Access profile service using token (Task B)
     with httpx.Client(base_url=PROFILE_URL, timeout=5.0) as prof_cli:
-        prof_resp = prof_cli.get(
-            "/profiles/me",  # PROVISIONAL
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        prof_headers = {"Authorization": f"Bearer {token}"}
+
+        # 4a. Read profile
+        prof_resp = prof_cli.get("/v1/profile", headers=prof_headers)
         assert prof_resp.status_code == 200
+
+        # 4b. Save interests
+        int_resp = prof_cli.put(
+            "/v1/profile/interests",
+            json={"interest_ids": ["tech", "art"]},
+            headers=prof_headers,
+        )
+        assert int_resp.status_code == 200
