@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlas-quality-foundation"
+version = "0.1.0"
+description = "Backend quality-engineering foundation and contract-testing framework"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=9.0.0",
+    "ruff>=0.17.0",
+    "httpx>=0.28.0",
+    "jsonschema>=4.26.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -v"
+markers = [
+    "unit: Unit tests for internal utilities and components",
+    "contract: API contract tests validating request/response schemas and state side-effects",
+    "integration: Smoke tests against live running services (skipped unless URLs are provided)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # Pyflakes
+    "I",  # isort (import sorting)
+    "B",  # flake8-bugbear
+]

@@ -1,0 +1,389 @@
+{
+  "auth_cases": [
+    {
+      "id": "AUTH-01-valid-registration-v1",
+      "preconditions": "Database empty or email unregistered",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "candidate1@example.test",
+        "first_name": "Candidate",
+        "password": "PolicyPass123!",
+        "phone": "+91 98765 43210"
+      },
+      "expected_status": 202,
+      "expected_response_shape": "json object with generic confirmation message",
+      "expected_side_effect": "Unverified user record created in pending state with normalized E.164 phone and pending verification code",
+      "security_note": "Ensures account status is strictly pending; phone_verified_at cannot be set by client; phone normalized to E.164",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-02-missing-email-v1",
+      "preconditions": "None",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "first_name": "Candidate",
+        "password": "PolicyPass123!"
+      },
+      "expected_status": 422,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user record created; database remains unchanged",
+      "security_note": "Rejects incomplete registration requests before storing state",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-03-malformed-email-v1",
+      "preconditions": "None",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "not-a-valid-email-format",
+        "first_name": "Candidate",
+        "password": "PolicyPass123!"
+      },
+      "expected_status": 422,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user record created; database remains unchanged",
+      "security_note": "Prevents malformed identifier injection and email delivery failures",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-04-invalid-password-policy-v1",
+      "preconditions": "None",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "weak_pwd@example.test",
+        "first_name": "WeakUser",
+        "password": "weak"
+      },
+      "expected_status": 422,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user record created; database remains unchanged",
+      "security_note": "Enforces minimum password complexity (min 8 chars, uppercase, lowercase, digit, special char)",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-05-missing-first-name-v1",
+      "preconditions": "None",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "nofirstname@example.test",
+        "first_name": "",
+        "password": "PolicyPass123!"
+      },
+      "expected_status": 422,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user record created; database remains unchanged",
+      "security_note": "Enforces mandatory first name validation for profile consistency",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-06-invalid-phone-format-v1",
+      "preconditions": "None",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "badphone@example.test",
+        "first_name": "BadPhone",
+        "password": "PolicyPass123!",
+        "phone": "1234"
+      },
+      "expected_status": 422,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user record created; database remains unchanged",
+      "security_note": "Rejects malformed phone input and prevents non-standard phone numbers",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-07-client-cannot-set-phone-verified-at",
+      "preconditions": "Database empty or email unregistered",
+      "method": "POST",
+      "path": "/v1/auth/registrations",
+      "payload": {
+        "email": "tamperphone@example.test",
+        "first_name": "TamperUser",
+        "password": "PolicyPass123!",
+        "phone": "+91 98765 43210",
+        "phone_verified_at": "2026-01-01T00:00:00Z",
+        "account_status": "active"
+      },
+      "expected_status": 202,
+      "expected_response_shape": "json object with generic confirmation message",
+      "expected_side_effect": "User record created with account_status pending and phone_verified_at null",
+      "security_note": "Anti-tampering: Client-supplied verified timestamps or active status are strictly ignored",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-08-invalid-verification-code-v1",
+      "preconditions": "User candidate1@example.test registered with code 123456",
+      "method": "POST",
+      "path": "/v1/auth/email-verifications/confirm",
+      "payload": {
+        "email": "candidate1@example.test",
+        "code": "999999"
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "User record remains in pending state; attempt counter incremented",
+      "security_note": "Rejects wrong challenge tokens; tracks failed attempts",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-09-reused-verification-challenge-v1",
+      "preconditions": "User candidate1@example.test verified with code 123456",
+      "method": "POST",
+      "path": "/v1/auth/email-verifications/confirm",
+      "payload": {
+        "email": "candidate1@example.test",
+        "code": "123456"
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Challenge rejected as already consumed; replay prevented",
+      "security_note": "Prevents replay attacks by invalidating one-time codes immediately upon use",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-10-unverified-user-cannot-sign-in-v1",
+      "preconditions": "User registered but email not verified",
+      "method": "POST",
+      "path": "/v1/auth/sessions",
+      "payload": {
+        "email": "unverified@example.test",
+        "password": "PolicyPass123!"
+      },
+      "expected_status": 403,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No active session created; access blocked until email verification complete",
+      "security_note": "Enforces mandatory verification gate prior to issuing session credentials",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-11-invalid-credentials-v1",
+      "preconditions": "User candidate1@example.test registered and verified with password PolicyPass123!",
+      "method": "POST",
+      "path": "/v1/auth/sessions",
+      "payload": {
+        "email": "candidate1@example.test",
+        "password": "WrongPassword999!"
+      },
+      "expected_status": 401,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No active session created; token table unchanged",
+      "security_note": "Rejects incorrect authentication credentials",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-12-unauthorized-session-access-v1",
+      "preconditions": "No session token provided in Authorization header",
+      "method": "GET",
+      "path": "/v1/auth/sessions/current",
+      "payload": null,
+      "expected_status": 401,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "No user session returned; access blocked",
+      "security_note": "Protects authenticated endpoints from unauthenticated callers",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-13-session-revocation-v1",
+      "preconditions": "User authenticated with active session token",
+      "method": "DELETE",
+      "path": "/v1/auth/sessions/current",
+      "payload": null,
+      "expected_status": 204,
+      "expected_response_shape": "empty response",
+      "expected_side_effect": "Session token added to revoked list and invalidated for future calls",
+      "security_note": "Ensures sign-out immediately terminates session validity",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-14-password-reset-generic-response-v1",
+      "preconditions": "Unknown or unregistered email provided",
+      "method": "POST",
+      "path": "/v1/auth/password-resets",
+      "payload": {
+        "email": "nonexistent_email_404@example.test"
+      },
+      "expected_status": 202,
+      "expected_response_shape": "json object with generic confirmation message",
+      "expected_side_effect": "No recovery code leaked; no change to registered accounts",
+      "security_note": "Prevents email and account enumeration attacks by returning uniform responses",
+      "approved_contract": "Task A (Vishal)"
+    },
+    {
+      "id": "AUTH-15-verification-resend-generic-response-v1",
+      "preconditions": "Registered user requests code resend",
+      "method": "POST",
+      "path": "/v1/auth/email-verifications/resend",
+      "payload": {
+        "email": "candidate1@example.test"
+      },
+      "expected_status": 202,
+      "expected_response_shape": "json object with generic confirmation message",
+      "expected_side_effect": "Resend respects cooldown and rate limiting; returns generic message",
+      "security_note": "Prevents enumeration while providing safe challenge delivery",
+      "approved_contract": "Task A (Vishal)"
+    }
+  ],
+  "profile_cases": [
+    {
+      "id": "PROF-01-profile-retrieval-authenticated",
+      "preconditions": "User logged in with active Bearer token",
+      "method": "GET",
+      "path": "/profiles/me",
+      "payload": null,
+      "expected_status": 200,
+      "expected_response_shape": "json object with user_id, username, and interests",
+      "expected_side_effect": "Read-only access; database remains unchanged",
+      "security_note": "Ensures authenticated caller can view their own profile",
+      "provisional": true
+    },
+    {
+      "id": "PROF-02-missing-or-invalid-profile-fields",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me",
+      "payload": {
+        "unauthorized_admin_role": true,
+        "is_superuser": true
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Profile attributes untouched; privilege escalation rejected",
+      "security_note": "Mass-assignment protection against injection of disallowed fields",
+      "provisional": true
+    },
+    {
+      "id": "PROF-03-duplicate-username-conflict",
+      "preconditions": "Another user has registered username candidate1",
+      "method": "PUT",
+      "path": "/profiles/me",
+      "payload": {
+        "username": "candidate1"
+      },
+      "expected_status": 409,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Current user username remains unchanged",
+      "security_note": "Enforces global uniqueness across user profile identifiers",
+      "provisional": true
+    },
+    {
+      "id": "PROF-04-valid-interest-id-list",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/interests",
+      "payload": {
+        "interest_ids": ["tech", "art"]
+      },
+      "expected_status": 200,
+      "expected_response_shape": "json object containing updated interests array",
+      "expected_side_effect": "Profile interest list updated to exactly ['tech', 'art']",
+      "security_note": "Allows users to associate recognized active catalog interests",
+      "provisional": true
+    },
+    {
+      "id": "PROF-05-unknown-interest-ids",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/interests",
+      "payload": {
+        "interest_ids": ["tech", "unknown_magic_hobby"]
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Interests list remains unchanged; partial update avoided",
+      "security_note": "Ensures only curated catalog tags can be assigned",
+      "provisional": true
+    },
+    {
+      "id": "PROF-06-inactive-interest-ids",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/interests",
+      "payload": {
+        "interest_ids": ["archived_crypto"]
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Interests list remains unchanged",
+      "security_note": "Prevents selection of deprecated or inactive catalog entities",
+      "provisional": true
+    },
+    {
+      "id": "PROF-07-duplicate-interest-ids",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/interests",
+      "payload": {
+        "interest_ids": ["tech", "tech"]
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Interests list remains unchanged",
+      "security_note": "Guarantees set uniqueness in persisted interests",
+      "provisional": true
+    },
+    {
+      "id": "PROF-08-more-than-five-interests",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/interests",
+      "payload": {
+        "interest_ids": ["tech", "art", "music", "sports", "science", "gaming"]
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Interests list remains unchanged",
+      "security_note": "Limits collection size to prevent storage and payload bloat",
+      "provisional": true
+    },
+    {
+      "id": "PROF-09-invalid-education-category-id",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/education",
+      "payload": {
+        "category_id": "invalid_kindergarten",
+        "institution_id": "inst_mit"
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Education details remain unchanged",
+      "security_note": "Validates category foreign key against approved taxonomies",
+      "provisional": true
+    },
+    {
+      "id": "PROF-10-invalid-institution-id",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/education",
+      "payload": {
+        "category_id": "undergraduate",
+        "institution_id": "inst_fake_999"
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Education details remain unchanged",
+      "security_note": "Validates institution foreign key against approved institute list",
+      "provisional": true
+    },
+    {
+      "id": "PROF-11-invalid-theme-preference",
+      "preconditions": "User logged in",
+      "method": "PUT",
+      "path": "/profiles/me/theme",
+      "payload": {
+        "theme": "neon_rainbow"
+      },
+      "expected_status": 400,
+      "expected_response_shape": "json object with an error field",
+      "expected_side_effect": "Theme preference remains unchanged",
+      "security_note": "Enforces strict enum choices (light, dark, system)",
+      "provisional": true
+    }
+  ]
+}
